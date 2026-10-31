@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "lldb",
+      "request": "launch",
+      "args": [],
+      "cwd": "/Users/wesleysimeontan/ai-at-70",
+      "program": "/Users/wesleysimeontan/ai-at-70/build/Debug/outDebug"
+    }
+  ]
+}
