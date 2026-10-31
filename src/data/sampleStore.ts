@@ -32,10 +32,11 @@ const backNode = (i: number): number => 20 + i;
  *
  * The edge lengths below are derived from these constants, so in this fixture
  * every edge equals the straight-line distance between its nodes exactly. Real
- * survey data will not be that tidy — walkways jog, aisles are not perfectly
- * parallel, and paced distances carry a few percent of error. That is why
- * tests/geometry.test.ts checks agreement within a tolerance rather than
- * asserting equality.
+ * survey data will not be that tidy: walkways jog around displays, aisles are
+ * not perfectly parallel, and paced distances carry a few percent of error. So
+ * tests/geometry.test.ts asserts the law that always holds — no walk is shorter
+ * than the straight line — and treats a walk more than twice the straight line
+ * as a survey mistake rather than a tight metric tolerance.
  */
 const AISLE_PITCH_M = 6;
 const AISLE_LENGTH_M = 25;
