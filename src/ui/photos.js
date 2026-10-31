@@ -55,7 +55,9 @@ export function openPhotos(a) {
         reset();
         return;
       }
-      a.items = [...a.items, ...fresh];
+      // syncDerived rebuilds items from left + right for coded aisles, so add to the list it keeps
+      if (a.no || fillNo) a.left = [...(a.no ? a.left : a.items), ...fresh];
+      else a.items = [...a.items, ...fresh];
       if (fillNo) a.no = aisleNo;
       syncDerived(a);
       save();

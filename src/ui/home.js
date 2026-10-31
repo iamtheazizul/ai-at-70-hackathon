@@ -5,6 +5,7 @@ import { STAGES } from "../core/constants.js";
 import { repo } from "../data/repo.js";
 import { app, hooks, save, savePrefs } from "./app.js";
 import { $, esc, toast, armed } from "./dom.js";
+import { photos } from "./photos.js";
 
 const ICON_CART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11h11l2-8H6.2"/><circle cx="9" cy="19.5" r="1.5"/><circle cx="17" cy="19.5" r="1.5"/></svg>';
 const ICON_PLAN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v12M13 3v12M18 3v12M3 19h18"/></svg>';
@@ -42,7 +43,14 @@ export async function renderPicker() {
     <div class="nav"><button class="ghost" id="pkHome">Back</button><div class="r"><button class="primary" id="pkNew">Map a new store</button></div></div>
   </section>`;
   $("#pkHome").onclick = () => setView("home");
-  $("#pkNew").onclick = () => { app.S = blankStore(); save(); hooks.show(); };
+  $("#pkNew").onclick = () => {
+    // a new store starts empty: drop everything the previous store left in memory
+    app.S = blankStore(); app.sel = null; app.trip = null; app.tripText = "";
+    for (const list of photos.values()) list.forEach((p) => URL.revokeObjectURL(p.url));
+    photos.clear();
+    const tripList = $("#tripList"); if (tripList) tripList.value = "";
+    save(); hooks.show();
+  };
   $("#picker").querySelectorAll("[data-open]").forEach((b) => (b.onclick = async () => {
     app.S = await repo.getStore(b.dataset.open);
     app.sel = null; app.trip = null;

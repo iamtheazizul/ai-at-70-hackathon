@@ -1,4 +1,4 @@
-# Aisle Mapper
+# Cartbud
 
 Map grocery stores and plan the shortest shopping trip through them.
 
