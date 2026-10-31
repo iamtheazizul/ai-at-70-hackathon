@@ -117,8 +117,8 @@ function rowHtml(a, i) {
       ${a.orient ? `<div class="orient" role="radiogroup" aria-label="Walk direction, row ${i + 1}">${fits.map((f) => `<button data-flow="${f}" aria-pressed="${a.flow === f}" title="${FLOWS[f][0]}">${ICON_FLOW[f]}</button>`).join("")}</div>`
         : '<span class="hint">Pick orientation first</span>'}</div>`;
   const cats = a.no
-    ? `<label>Left side<input data-f="left" value="${esc(a.left.join(", "))}" placeholder="${a.flow ? "In the order you pass them" : "Pick walk direction first"}" ${a.flow ? "" : "disabled"}></label>
-       <label>Right side<input data-f="right" value="${esc(a.right.join(", "))}" placeholder="${a.flow ? "In the order you pass them" : "Pick walk direction first"}" ${a.flow ? "" : "disabled"}></label>`
+    ? `<label>Left side<input data-f="left" value="${esc(a.left.join(", "))}" placeholder="In the order you pass them"></label>
+       <label>Right side<input data-f="right" value="${esc(a.right.join(", "))}" placeholder="In the order you pass them"></label>`
     : `<label class="full">Categories<input data-f="items" value="${esc(a.items.join(", "))}" placeholder="${i === 0 ? "Produce, fruit, herbs" : "Bakery, bread, cakes"}"></label>`;
   return `<div class="rw" data-i="${i}">
     <div class="r1">
