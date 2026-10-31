@@ -1,0 +1,30 @@
+name: CI
+
+# The implementation plan gates each week on a test result rather than a
+# judgement (§8), and §7.2 asks for the trip simulator to run in CI. This is
+# that check: src/core carries no DOM, camera, network or SQL, so it runs
+# headless with no store pack, no device and no Supabase project.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
