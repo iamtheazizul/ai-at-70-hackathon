@@ -183,6 +183,12 @@ def main() -> None:
              "referencing missing photos is not.",
     )
     ap.add_argument("--force", action="store_true", help="overwrite the output directory")
+    ap.add_argument(
+        "--json",
+        action="store_true",
+        help="also emit rows.json: the same rows as store.sqlite, for readers that cannot "
+             "open SQLite (the browser). Declared in the manifest with its own digest.",
+    )
     args = ap.parse_args()
 
     rows = json.loads(args.rows.read_text())
@@ -301,6 +307,37 @@ def main() -> None:
     unreachable = len(node_ids) * (len(node_ids) - 1) - len(distances)
     if unreachable:
         print(f"  warning: {unreachable} node pair(s) unreachable; install validators 2 and 3 will fail")
+
+    # ---- rows.json -------------------------------------------------------
+    # The same rows, for readers that cannot open SQLite. Emitted after the
+    # database so the photo_path edits from --no-photos are already applied and
+    # the two cannot disagree about what the pack contains.
+    if args.json:
+        web_rows = {
+            "store": [{"id": store["id"], "name": store["name"],
+                       "layout_version": store["layout_version"],
+                       "surveyed_on": store["surveyed_on"]}],
+            "node": [{"id": n["id"], "kind": n["kind"], "label": n["label"],
+                      "aisle_id": n.get("aisle_id"), "x_metres": n.get("x_metres"),
+                      "y_metres": n.get("y_metres"), "photo_path": n.get("photo_path")} for n in nodes],
+            "edge": [{"a_node": e["a_node"], "b_node": e["b_node"], "metres": float(e["metres"]),
+                      "measured": int(bool(e["measured"])), "verified_on": e["verified_on"]} for e in edges],
+            "aisle": [{"id": a["id"], "label": a["label"],
+                       "reference_end_node": a["reference_end_node"],
+                       "direction_note": a.get("direction_note"),
+                       "is_cold": int(bool(a.get("is_cold"))),
+                       "cold_relaxed": int(bool(a.get("cold_relaxed")))} for a in rows["aisles"]],
+            "aisle_sign_variant": rows["aisle_sign_variants"],
+            "section": rows["sections"],
+            "product": rows["products"],
+            "product_barcode": rows["product_barcodes"],
+            "product_location": rows["product_locations"],
+            "node_distance": [{"from_node": a, "to_node": b, "metres": m, "path_json": json.dumps(path)}
+                              for a, b, m, path in distances],
+            "scheduled_product": [{"product_id": pid} for pid in rows.get("scheduled_products", [])],
+        }
+        (args.out / "rows.json").write_text(json.dumps(web_rows, separators=(",", ":")) + "\n")
+        print(f"  rows.json: {(args.out / 'rows.json').stat().st_size} bytes")
 
     # ---- manifest.json ---------------------------------------------------
     survey_dates = sorted({l["verified_on"] for l in rows["product_locations"]} |

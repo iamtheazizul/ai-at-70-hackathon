@@ -236,6 +236,30 @@ describe('6. freshness (advisory)', () => {
 });
 
 describe('validatePack', () => {
+  it('says which validators ran, so a skipped one is not read as a pass', () => {
+    // A browser reader has not fetched the photos, so validator 5 cannot run.
+    // It must be visible in the result rather than inferred from silence.
+    const pack = basePack();
+    const manifest = baseManifest(pack);
+    const args = {
+      manifest,
+      staged: stagedFor(manifest),
+      pack,
+      scheduledProducts: SCHEDULED,
+      asOf: '2026-11-10',
+      freshnessWindowDays: 30,
+    };
+    expect(validatePack(args).ran).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(validatePack({ ...args, skipPhotoResolution: true }).ran).toEqual([1, 2, 3, 4, 6]);
+
+    // And skipping it really does suppress a failure it would otherwise raise.
+    const broken = basePack();
+    broken.nodes = broken.nodes.map((n) => (n.id === 1 ? { ...n, photoPath: 'photos/gone.webp' } : n));
+    const brokenArgs = { ...args, pack: broken };
+    expect(validatePack(brokenArgs).blocking.some((v) => v.validator === 5)).toBe(true);
+    expect(validatePack({ ...brokenArgs, skipPhotoResolution: true }).blocking).toEqual([]);
+  });
+
   it('installs a sound pack: nothing blocking, nothing advisory', () => {
     const pack = basePack();
     const manifest = baseManifest(pack);
@@ -247,7 +271,7 @@ describe('validatePack', () => {
       asOf: '2026-11-10',
       freshnessWindowDays: 30,
     });
-    expect(result).toEqual({ blocking: [], advisory: [] });
+    expect(result).toEqual({ blocking: [], advisory: [], ran: [1, 2, 3, 4, 5, 6] });
   });
 
   it('derives the required nodes from the scheduled products own sections', () => {

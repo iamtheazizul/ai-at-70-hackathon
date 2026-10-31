@@ -11,7 +11,8 @@
     "apply-schema": "node scripts/apply-schema.mjs",
     "check-schema": "node scripts/check-schema.mjs",
     "gen-seed": "node scripts/gen-seed.mjs",
-    "export-rows": "node scripts/export-rows.mjs"
+    "export-rows": "node scripts/export-rows.mjs",
+    "build-pack": "node scripts/build-web-pack.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

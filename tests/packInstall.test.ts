@@ -12,12 +12,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { assemblePack, packDirectoryName, parseManifest, type PackRows } from '../src/core/pack/parse';
-import { buildDistanceMatrix } from '../src/core/route/distance';
 import { APP_PACK_SCHEMA, installPack, stagingPath, sweepStaging } from '../src/pack/install';
 import { readRowsFromSqlite, sqliteAvailable } from '../src/pack/sqliteRows';
-import { sampleList, sampleStorePack as fixture } from '../src/data/sampleStore';
+import { fetchWebPack } from '../src/pack/webPack';
+import { sampleStorePack as fixture } from '../src/data/sampleStore';
+import { SCHEDULED, fixtureRows } from './helpers/fixtureRows';
 
-const SCHEDULED = [...new Set(sampleList.flatMap((e) => e.acceptedProducts))];
 const temps: string[] = [];
 const temp = (): string => {
   const d = mkdtempSync(join(tmpdir(), 'shoptimal-install-'));
@@ -25,44 +25,6 @@ const temp = (): string => {
   return d;
 };
 afterAll(() => temps.forEach((d) => rmSync(d, { recursive: true, force: true })));
-
-/** The fixture as store.sqlite would return it: snake_case, 1/0 for booleans. */
-function fixtureRows(): PackRows {
-  const dist = buildDistanceMatrix(fixture.nodes, fixture.edges);
-  const node_distance: Record<string, unknown>[] = [];
-  for (const a of dist.nodes) {
-    for (const b of dist.nodes) {
-      if (a === b || !Number.isFinite(dist.metres(a, b))) continue;
-      node_distance.push({ from_node: a, to_node: b, metres: dist.metres(a, b), path_json: JSON.stringify(dist.path(a, b)) });
-    }
-  }
-  return {
-    store: [{ id: 1, name: fixture.storeName, layout_version: fixture.layoutVersion }],
-    node: fixture.nodes.map((n) => ({
-      id: n.id, kind: n.kind, label: n.label,
-      aisle_id: n.aisleId ?? null, x_metres: n.xMetres ?? null, y_metres: n.yMetres ?? null,
-      photo_path: n.photoPath ?? null,
-    })),
-    edge: fixture.edges.map((e) => ({ a_node: e.a, b_node: e.b, metres: e.metres, measured: e.measured ? 1 : 0 })),
-    aisle: fixture.aisles.map((a) => ({
-      id: a.id, label: a.label, reference_end_node: a.referenceEndNode,
-      is_cold: a.isCold ? 1 : 0, cold_relaxed: a.coldRelaxed ? 1 : 0,
-    })),
-    aisle_sign_variant: fixture.aisles.flatMap((a) => a.signVariants.map((v) => ({ aisle_id: a.id, variant: v.variant, kind: v.kind }))),
-    section: fixture.sections.map((s) => ({ id: s.id, aisle_id: s.aisleId, side: s.side, bay: s.bay, access_node: s.accessNode })),
-    product: fixture.products.map((p) => ({
-      id: p.id, name: p.name, brand: p.brand ?? null, variant: p.variant ?? null,
-      size_text: p.sizeText ?? null, category: p.category, photo_path: p.photoPath ?? null,
-    })),
-    product_barcode: Object.entries(fixture.barcodes).map(([barcode, product_id]) => ({ barcode, product_id })),
-    product_location: fixture.locations.map((l) => ({
-      product_id: l.productId, section_id: l.sectionId, shelf_level: l.shelfLevel ?? null,
-      source: l.source, verified_on: l.verifiedOn, review_status: l.reviewStatus,
-    })),
-    node_distance,
-    scheduled_product: SCHEDULED.map((product_id) => ({ product_id })),
-  };
-}
 
 const sha = (b: Buffer | string): string => createHash('sha256').update(b).digest('hex');
 
@@ -307,5 +269,52 @@ describe.skipIf(!hasPython || !hasSqlite)('end to end through tools/packbuild', 
     expect(reread.distances.length).toBe(fixture.nodes.length * (fixture.nodes.length - 1));
     expect(reread.nodes.find((n) => n.id === 1)!.xMetres).toBe(0);
     expect(packDirectoryName({ packId: rows.pack_id, packVersion: rows.pack_version } as never)).toBe('sample-store-v1');
+  });
+
+  it('builds a browser-readable pack and loads it through the web reader', async () => {
+    const work = temp();
+    const rowsPath = join(work, 'rows.json');
+    expect(spawnSync('node', ['scripts/export-rows.mjs', rowsPath], { encoding: 'utf8' }).status).toBe(0);
+
+    const out = join(work, 'webpack');
+    const built = spawnSync(
+      'python3',
+      ['tools/packbuild/build.py', rowsPath, out, '--json', '--no-photos'],
+      { encoding: 'utf8' },
+    );
+    expect(built.status, built.stderr).toBe(0);
+
+    // Serve the built directory to the reader exactly as the dev server would.
+    const serveDir: typeof fetch = (async (url: string | URL) => {
+      const name = String(url).split('/').pop()!;
+      const file = join(out, name);
+      if (!existsSync(file)) return { ok: false, status: 404 } as Response;
+      const body = readFileSync(file);
+      return {
+        ok: true,
+        status: 200,
+        text: async () => body.toString('utf8'),
+        arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+      } as Response;
+    }) as unknown as typeof fetch;
+
+    const result = await fetchWebPack('/pack', serveDir);
+    expect(result.errors).toEqual([]);
+    expect(result.loaded).toBeDefined();
+
+    const { pack, distances } = result.loaded!;
+    expect(pack.nodes.length).toBe(fixture.nodes.length);
+    expect(pack.edges.length).toBe(fixture.edges.length);
+    expect(Object.keys(pack.barcodes).length).toBe(Object.keys(fixture.barcodes).length);
+    expect(distances.length).toBe(fixture.nodes.length * (fixture.nodes.length - 1));
+    // --no-photos dropped the paths, so nothing references a file the pack lacks.
+    expect(pack.nodes.every((n) => n.photoPath === undefined)).toBe(true);
+
+    // The digest in the manifest is the digest of the bytes on disk: tamper and
+    // the reader refuses it.
+    writeFileSync(join(out, 'rows.json'), `${readFileSync(join(out, 'rows.json'), 'utf8')}\n`);
+    const tampered = await fetchWebPack('/pack', serveDir);
+    expect(tampered.loaded).toBeUndefined();
+    expect(tampered.errors.join(' ')).toContain('digest does not match');
   });
 });

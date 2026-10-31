@@ -25,3 +25,6 @@ packs/out/
 
 # VS Code Python extension artefact
 .vscode/PythonImportHelper-*.json
+
+# Pack served to the dev server (built artefact, not source)
+public/pack/

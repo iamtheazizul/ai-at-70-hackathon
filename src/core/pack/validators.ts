@@ -25,6 +25,8 @@ export interface ValidationResult {
   blocking: Violation[];
   /** Validator 6. Stored with the pack so the UI reads it without recomputing. */
   advisory: Violation[];
+  /** Which of the six actually ran, so a skipped check is never mistaken for a pass. */
+  ran: number[];
 }
 
 export interface PackData {
@@ -50,6 +52,13 @@ export interface ValidationInput {
   asOf: string;
   /** Locations older than this are flagged, not rejected. Plan §3 starts at 30. */
   freshnessWindowDays: number;
+  /**
+   * Skip validator 5. For a reader that has not fetched the photos yet: it
+   * cannot resolve photo paths, and reporting all of them as missing would be
+   * worse than not asking. A reader that does hold the files must leave this
+   * off. The result says which validators ran, so this cannot be forgotten.
+   */
+  skipPhotoResolution?: boolean;
 }
 
 const v = (validator: number, name: string, message: string): Violation => ({ validator, name, message });
@@ -244,14 +253,17 @@ export function validatePack(input: ValidationInput): ValidationResult {
 
   const photoFiles = manifest.files.filter((f) => f.path.startsWith('photos/')).map((f) => f.path);
 
+  const blocking = [
+    ...validateIntegrity(manifest, staged),
+    ...validateConnectivity(pack, requiredNodes),
+    ...validateDistanceCompleteness(pack, requiredNodes),
+    ...validateCatalogueCoverage(pack, scheduledProducts),
+    ...(input.skipPhotoResolution ? [] : validatePhotoResolution(pack, photoFiles)),
+  ];
+
   return {
-    blocking: [
-      ...validateIntegrity(manifest, staged),
-      ...validateConnectivity(pack, requiredNodes),
-      ...validateDistanceCompleteness(pack, requiredNodes),
-      ...validateCatalogueCoverage(pack, scheduledProducts),
-      ...validatePhotoResolution(pack, photoFiles),
-    ],
+    blocking,
     advisory: validateFreshness(pack, asOf, freshnessWindowDays),
+    ran: input.skipPhotoResolution ? [1, 2, 3, 4, 6] : [1, 2, 3, 4, 5, 6],
   };
 }
