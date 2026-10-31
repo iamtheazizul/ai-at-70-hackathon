@@ -22,7 +22,6 @@ const appRoot = document.querySelector<HTMLDivElement>("#app");
 if (!appRoot) throw new Error("#app mount point missing from index.html");
 // Typed non-null so the render functions below need no repeated guard.
 const app: HTMLDivElement = appRoot;
-if (!app) throw new Error("Missing #app");
 
 let catalog: Catalog = demoCatalog;
 let pastItems: PastTripItem[] = demoPastItems;
