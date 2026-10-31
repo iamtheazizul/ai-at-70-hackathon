@@ -1,0 +1,111 @@
+:root {
+  color: #1a1a1a;
+  background: #f4f1ea;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 20px;
+  line-height: 1.4;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 24px 16px 48px;
+}
+
+main {
+  max-width: 32rem;
+  margin: 0 auto;
+}
+
+h1 { font-size: 1.8rem; margin: 0 0 0.25rem; }
+h2 { font-size: 1.5rem; margin: 0 0 0.5rem; }
+
+.note, .hint, .message {
+  color: #333;
+  margin: 0.4rem 0 1rem;
+}
+
+.banner {
+  background: #fff;
+  border: 2px solid #1a1a1a;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+label { display: block; font-weight: 700; margin-bottom: 0.35rem; }
+
+input[type="text"] {
+  width: 100%;
+  font: inherit;
+  padding: 0.7rem 0.8rem;
+  border: 2px solid #1a1a1a;
+  background: #fff;
+  border-radius: 0;
+}
+
+.results, .list {
+  list-style: none;
+  padding: 0;
+  margin: 0.6rem 0 1rem;
+}
+
+.results button, .text-action, .primary, .bench button {
+  font: inherit;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.results button, .text-action {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 2px solid #1a1a1a;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.4rem;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+
+.primary {
+  min-height: 3.4rem;
+  background: #1a1a1a;
+  color: #fff;
+  border: 2px solid #1a1a1a;
+  font-weight: 700;
+}
+
+.primary.secondary { background: #fff; color: #1a1a1a; }
+
+.bench {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 2px solid #ccc;
+}
+
+.bench button {
+  margin-top: 0.5rem;
+  min-height: 2.8rem;
+  padding: 0.4rem 0.8rem;
+  background: #fff;
+  border: 2px solid #1a1a1a;
+}
+
+.row { display: flex; gap: 0.5rem; margin: 0.6rem 0 1rem; }
+.row .primary { flex: 1; }
+
+#summary {
+  white-space: pre-wrap;
+  background: #fff;
+  border: 2px solid #1a1a1a;
+  padding: 1rem;
+  font: inherit;
+}
+
+.paused { background: #efe6c9; padding: 0.6rem 0.8rem; border: 2px solid #1a1a1a; }

@@ -1,3 +1,19 @@
+-- ============================================================================
+-- STATUS: NOT APPLIED. Do not run this alongside migrations/0001_mvp.sql.
+--
+-- Two schemas now live in this repo and they model the same things twice:
+--   migrations/0001_mvp.sql  -> stores, products, locations, lists, trips
+--                               (plural) — backs the running Vite demo.
+--   this file                -> store, product, product_location, node, edge,
+--                               section, store_pack (singular) — the
+--                               capstone-grade model from the implementation
+--                               plan, with a walkable graph and sealed packs.
+--
+-- The table names do not collide, so applying both SUCCEEDS and leaves two
+-- competing answers to "where is this product". Pick one before applying.
+-- Recommendation: run 0001_mvp.sql for the demo; keep this as the target model.
+-- ============================================================================
+
 -- Shoptimal master data (Supabase / Postgres)
 -- Run in the SQL editor of the project at gflmdpdcairhkewtdzqs.supabase.co
 --
