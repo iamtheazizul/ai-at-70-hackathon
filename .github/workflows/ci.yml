@@ -16,9 +16,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 22, not 20: tests/packInstall.test.ts reads store.sqlite through
+      # node:sqlite, which is built in from 22. On 20 that suite would skip
+      # itself and CI would stay green over an untested pack loader.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
