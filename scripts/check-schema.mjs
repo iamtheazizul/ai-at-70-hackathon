@@ -1,11 +1,15 @@
-// Ask PostgREST whether the tables the app reads are actually there.
+// Ask PostgREST whether the migrations have actually been applied.
 //
-// This is the check that was missing: loadRemoteCatalog() swallows every error
-// and falls back to the bundled demo catalogue, so a completely unapplied
-// schema looks exactly like a working app. Run this to tell the two apart.
+// Reads with the publishable key only, which is safe: under the graph schema's
+// RLS, anon has no read access to master data at all.
 //
-// Needs only the publishable key, which is already in .env and is safe to ship
-// to a browser: the tables are select-only to anon under RLS.
+// So a correctly applied schema reports every master table as present with
+// ZERO rows. That is not a failure — it is the RLS working. Existence is what
+// this checks: 404 means the table is not there, 200 means it is. The row count
+// is only meaningful for store_pack, whose policy exposes published packs.
+//
+// To see the seeded rows you need a credential that bypasses RLS (psql over
+// SUPABASE_DB_URL, or the dashboard table editor).
 
 import { readFileSync } from 'node:fs';
 
@@ -34,17 +38,19 @@ if (!url || !key) {
   process.exit(1);
 }
 
-// Exactly what src/mvp/remote.ts asks for, so a pass here means the app works.
+// The eleven tables of supabase/migrations/0001_store_graph.sql.
 const PROBES = [
-  ['stores', 'id,name,note'],
-  ['products', 'id,name'],
-  ['synonyms', 'product_id,phrase'],
-  ['locations', 'store_id,product_id,aisle'],
-  ['substitute_rules', 'store_id,product_id,substitute_product_id'],
-  ['lists', 'id,store_id,title'],
-  ['list_items', 'list_id,position,raw_text'],
-  ['trips', 'id,store_id,shopper'],
-  ['trip_items', 'trip_id,product_id,status'],
+  ['store', 'id,name,layout_version'],
+  ['node', 'id,kind,label,x_metres,y_metres'],
+  ['edge', 'id,a_node,b_node,metres,measured'],
+  ['aisle', 'id,label,is_cold'],
+  ['aisle_sign_variant', 'aisle_id,variant,kind'],
+  ['section', 'id,aisle_id,side,bay'],
+  ['product', 'id,name,brand,category'],
+  ['product_barcode', 'barcode,product_id'],
+  ['product_location', 'product_id,section_id,source,review_status'],
+  ['location_observation', 'id,product_id,review_outcome'],
+  ['store_pack', 'id,pack_version,published'],
 ];
 
 console.log(`${url}\n`);
@@ -58,20 +64,21 @@ for (const [table, select] of PROBES) {
   if (response.ok) {
     // content-range comes back as "0-0/12"; the tail is the total row count.
     const total = (response.headers.get('content-range') ?? '').split('/')[1] ?? '?';
-    console.log(`  ok       ${table.padEnd(18)} ${total} row(s)`);
+    const note = total === '0' && table !== 'store_pack' ? ' (0 expected: RLS hides master data from anon)' : '';
+    console.log(`  ok       ${table.padEnd(22)} ${total} row(s)${note}`);
     continue;
   }
 
   missing += 1;
   const body = await response.json().catch(() => ({}));
   const reason = body.code === 'PGRST205' ? 'table not in the schema cache' : (body.message ?? response.statusText);
-  console.log(`  MISSING  ${table.padEnd(18)} ${response.status} ${reason}`);
+  console.log(`  MISSING  ${table.padEnd(22)} ${response.status} ${reason}`);
 }
 
 if (missing > 0) {
-  console.error(`\n${missing} of ${PROBES.length} tables unreachable. The app is on bundled demo data.`);
+  console.error(`\n${missing} of ${PROBES.length} tables are not there.`);
   console.error('Apply the migrations with: npm run apply-schema');
   process.exit(1);
 }
 
-console.log(`\nAll ${PROBES.length} tables reachable. The app will read live data.`);
+console.log(`\nAll ${PROBES.length} tables present. Master data reads as empty to anon, by design.`);
