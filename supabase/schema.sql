@@ -42,6 +42,12 @@ create table if not exists node (
                ('entrance','aisle_end','intersection','checkout','service_desk','landmark')),
   label      text not null,              -- shopper-facing: 'Aisle 7, bakery end'
   aisle_id   bigint,                     -- FK added after aisle exists
+  -- Top-down survey coordinates, metres, origin and axes fixed per store in
+  -- store.layout_version. Nullable on purpose: routing reads edge.metres and
+  -- nothing else, so a store with no drawing still routes. When present they
+  -- let the survey be drawn and paced edges cross-checked against the plan.
+  x_metres   double precision,
+  y_metres   double precision,
   photo_path text
 );
 

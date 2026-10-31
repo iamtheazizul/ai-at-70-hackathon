@@ -26,9 +26,34 @@ const AISLE_CATEGORY: Record<number, string> = {
 const frontNode = (i: number): number => 10 + i;
 const backNode = (i: number): number => 20 + i;
 
+/**
+ * Top-down geometry, metres. Origin is the front end of aisle 1; x runs along
+ * the front walkway, y from the front walkway towards the back of the store.
+ *
+ * The edge lengths below are derived from these constants, so in this fixture
+ * every edge equals the straight-line distance between its nodes exactly. Real
+ * survey data will not be that tidy — walkways jog, aisles are not perfectly
+ * parallel, and paced distances carry a few percent of error. That is why
+ * tests/geometry.test.ts checks agreement within a tolerance rather than
+ * asserting equality.
+ */
+const AISLE_PITCH_M = 6;
+const AISLE_LENGTH_M = 25;
+const ENTRANCE_SETBACK_M = 5;
+const CHECKOUT_OFFSET_M = 4;
+
+const aisleX = (i: number): number => AISLE_PITCH_M * (i - 1);
+
 const nodes: StoreNode[] = [
-  { id: 1, kind: 'entrance', label: 'Main entrance', photoPath: 'photos/entrance.webp' },
-  { id: 2, kind: 'checkout', label: 'Checkouts' },
+  {
+    id: 1,
+    kind: 'entrance',
+    label: 'Main entrance',
+    xMetres: 0,
+    yMetres: -ENTRANCE_SETBACK_M,
+    photoPath: 'photos/entrance.webp',
+  },
+  { id: 2, kind: 'checkout', label: 'Checkouts', xMetres: -CHECKOUT_OFFSET_M, yMetres: 0 },
 ];
 for (let i = 1; i <= AISLE_COUNT; i++) {
   nodes.push({
@@ -36,6 +61,8 @@ for (let i = 1; i <= AISLE_COUNT; i++) {
     kind: 'aisle_end',
     label: `Aisle ${i}, front end`,
     aisleId: i,
+    xMetres: aisleX(i),
+    yMetres: 0,
     photoPath: `photos/aisle-${i}-front.webp`,
   });
   nodes.push({
@@ -43,20 +70,22 @@ for (let i = 1; i <= AISLE_COUNT; i++) {
     kind: 'aisle_end',
     label: `Aisle ${i}, back end`,
     aisleId: i,
+    xMetres: aisleX(i),
+    yMetres: AISLE_LENGTH_M,
     photoPath: `photos/aisle-${i}-back.webp`,
   });
 }
 
 const edges: Edge[] = [
-  { a: 1, b: frontNode(1), metres: 5, measured: true },
-  { a: 2, b: frontNode(1), metres: 4, measured: true },
+  { a: 1, b: frontNode(1), metres: ENTRANCE_SETBACK_M, measured: true },
+  { a: 2, b: frontNode(1), metres: CHECKOUT_OFFSET_M, measured: true },
 ];
 for (let i = 1; i < AISLE_COUNT; i++) {
-  edges.push({ a: frontNode(i), b: frontNode(i + 1), metres: 6, measured: true });
-  edges.push({ a: backNode(i), b: backNode(i + 1), metres: 6, measured: true });
+  edges.push({ a: frontNode(i), b: frontNode(i + 1), metres: AISLE_PITCH_M, measured: true });
+  edges.push({ a: backNode(i), b: backNode(i + 1), metres: AISLE_PITCH_M, measured: true });
 }
 for (let i = 1; i <= AISLE_COUNT; i++) {
-  edges.push({ a: frontNode(i), b: backNode(i), metres: 25, measured: true });
+  edges.push({ a: frontNode(i), b: backNode(i), metres: AISLE_LENGTH_M, measured: true });
 }
 
 const aisles: Aisle[] = [];

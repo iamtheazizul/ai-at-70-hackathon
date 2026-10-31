@@ -20,6 +20,14 @@ export interface StoreNode {
   /** Shopper-facing, e.g. "Aisle 7, bakery end". Instructions are built from these. */
   label: string;
   aisleId?: AisleId;
+  /**
+   * Top-down survey coordinates in metres. Optional, and the solver never
+   * reads them: `Edge.metres` is the only distance routing sees. They exist so
+   * the survey can be drawn and so paced edges can be checked against the
+   * drawing. Absent for any store mapped by pacing alone.
+   */
+  xMetres?: number;
+  yMetres?: number;
   photoPath?: string;
 }
 
