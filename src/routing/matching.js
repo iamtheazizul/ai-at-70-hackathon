@@ -20,14 +20,26 @@ export function lev(a, b) {
   return prev[n];
 }
 
-/** Index every aisle's categories (and its display name) for matching. */
+/**
+ * Index every category for matching. Each entry remembers where it is:
+ *   coded aisle → side ("left"/"right"), its index on that side and how many share the side
+ *   section or aisle name → side null (go to the shape itself)
+ */
 export function buildItemIndex(aisles) {
   const entries = [];
-  for (const a of aisles)
-    for (const item of [...(a.items || []), a.name]) {
-      const key = item && normItem(item);
-      if (key) entries.push({ section: a.id, item, key, words: key.split(" ") });
-    }
+  const add = (a, item, extra) => {
+    const key = item && normItem(item);
+    if (key) entries.push({ section: a.id, item, key, words: key.split(" "), side: null, ...extra });
+  };
+  for (const a of aisles) {
+    if (a.kind === "aisle")
+      for (const side of ["left", "right"]) {
+        const list = a[side] || [];
+        list.forEach((item, index) => add(a, item, { side, index, count: list.length }));
+      }
+    else (a.items || []).forEach((item) => add(a, item));
+    add(a, a.name);
+  }
   return entries;
 }
 

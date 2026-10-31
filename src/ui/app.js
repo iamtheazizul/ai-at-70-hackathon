@@ -1,15 +1,21 @@
 // App state, persistence, and cross-module hooks.
 // UI modules read and write `app`; `hooks` lets them call each other without import cycles.
 
-import { STORAGE_KEY } from "../core/constants.js";
+import { repo } from "../data/repo.js";
 import { planTrip } from "../routing/tripPlanner.js";
 
+const PREFS_KEY = "aisle-mapper-ui";
+
 export const app = {
-  S: null,        // the store being edited
+  view: "home",   // "home" | "contribute" | "shop"
+  // contributor
+  S: null,        // the store being mapped (null = choosing a store)
   sel: null,      // selected aisle id on the map
-  trip: null,     // current planned route (see routing/tripPlanner.js)
-  tripText: "",   // shopping list that produced it
+  trip: null,     // test route in the map editor
+  tripText: "",
   mode3d: false,
+  // shopper
+  shop: { stage: "store", storeId: null, S: null, list: [], trip: null, step: 0, got: [] },
 };
 
 // Filled in by main.js.
@@ -17,20 +23,21 @@ export const hooks = {
   show() {}, render() {}, renderWizard() {}, renderTrip() {}, select() {},
 };
 
-export function loadStore() {
-  try {
-    const s = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (s && Array.isArray(s.aisles)) return s;
-  } catch (e) { /* storage blocked or empty */ }
-  return null;
+/* ---------- small per-browser preferences (which screen, shopping list…) ---------- */
+export function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch (e) { return {}; }
+}
+export function savePrefs() {
+  const { stage, storeId, list, step, got } = app.shop;
+  const prefs = { view: app.view, contributeId: app.S?.id || null, mode3d: app.mode3d, shop: { stage, storeId, list, step, got } };
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* storage blocked */ }
 }
 
-export const getView = () => { try { return localStorage.getItem(STORAGE_KEY + ":view"); } catch (e) { return null; } };
-export const setView = (v) => { try { localStorage.setItem(STORAGE_KEY + ":view", v); } catch (e) { /* ignore */ } };
-
-/** Persist the store, refresh the JSON box, and re-plan an open route against the new layout. */
+/** Persist the store being mapped, refresh the JSON box, and re-plan an open test route. */
 export function save() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(app.S)); } catch (e) { /* storage blocked */ }
+  if (!app.S) return;
+  repo.saveStore(app.S);
+  savePrefs();
   const json = document.querySelector("#json");
   if (json) json.value = JSON.stringify(app.S, null, 1);
   if (app.trip && app.S.stage === "map") {

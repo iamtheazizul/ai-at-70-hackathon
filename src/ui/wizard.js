@@ -1,13 +1,13 @@
 // Contributor flow: store → how many → aisle table → neighbours per aisle → map.
 
-import { STAGES, PTS, PT_NAME, SPECIAL, FLOWS } from "../core/constants.js";
-import { cap, parseItems, newAisle, syncDerived, aisleTitle, shortLabel, nbLabel, byId, setNb, setAisleCount, incompleteRows } from "../core/model.js";
+import { STAGES, PTS, PT_NAME, SPECIAL, FLOWS, FLOWS_FOR } from "../core/constants.js";
+import { cap, parseItems, newAisle, syncDerived, aisleTitle, shortLabel, nbLabel, byId, setNb, setAisleCount, rowProblem, incompleteRows, setOrient, setFlow } from "../core/model.js";
 import { exampleStore } from "../core/example.js";
 import { generateFromAnswers } from "../core/layout.js";
 import { app, hooks, save, markDirty } from "./app.js";
 import { $, esc, toast } from "./dom.js";
 import { openModal, closeModal } from "./modal.js";
-import { ICON_H, ICON_V, ICON_CAM, orientIllus, flowIllus } from "./illustrations.js";
+import { ICON_H, ICON_V, ICON_CAM, ICON_FLOW, orientIllus, sidesIllus } from "./illustrations.js";
 import { openPhotos, photoCount } from "./photos.js";
 
 /* ---------- navigation ---------- */
@@ -36,6 +36,7 @@ export function renderSteps() {
 }
 
 export function renderWizard() {
+  if (!app.S) return;
   ({ address: stepAddress, count: stepCount, list: stepList, nb: stepNeighbors })[app.S.stage]?.();
 }
 
@@ -102,45 +103,88 @@ export function showOrientInfo() {
   <div class="nav" style="border:0;padding:0"><span></span><button class="primary" data-close>Got it</button></div>`);
 }
 
+export function showSidesInfo() {
+  openModal(`<h3>Walking direction and sides</h3>
+  <p>Pick the direction you'd walk the aisle, starting at the end where its first shelves are. Then imagine walking it that way: whatever is on your left hand goes in <b style="color:var(--ink)">Left side</b>, your right hand in <b style="color:var(--ink)">Right side</b>. List each side in the order you pass things.</p>
+  <div class="flowgrid">${Object.keys(FLOWS).map((f) => `<div class="flowopt">${sidesIllus(f)}<b>${FLOWS[f][0]}</b><small>${FLOWS[f][1]}</small></div>`).join("")}</div>
+  <p>Vertical aisles walk closest → furthest or furthest → closest. Horizontal aisles walk left → right or right → left.</p>
+  <div class="nav" style="border:0;padding:0"><span></span><button class="primary" data-close>Got it</button></div>`);
+}
+
+function rowHtml(a, i) {
+  const fits = a.orient ? FLOWS_FOR[a.orient] : [];
+  const flowCtl = !a.no ? "" : `<div class="fld"><span class="lbl">Walk direction</span>
+      ${a.orient ? `<div class="orient" role="radiogroup" aria-label="Walk direction, row ${i + 1}">${fits.map((f) => `<button data-flow="${f}" aria-pressed="${a.flow === f}" title="${FLOWS[f][0]}">${ICON_FLOW[f]}</button>`).join("")}</div>`
+        : '<span class="hint">Pick orientation first</span>'}</div>`;
+  const cats = a.no
+    ? `<label>Left side<input data-f="left" value="${esc(a.left.join(", "))}" placeholder="${a.flow ? "In the order you pass them" : "Pick walk direction first"}" ${a.flow ? "" : "disabled"}></label>
+       <label>Right side<input data-f="right" value="${esc(a.right.join(", "))}" placeholder="${a.flow ? "In the order you pass them" : "Pick walk direction first"}" ${a.flow ? "" : "disabled"}></label>`
+    : `<label class="full">Categories<input data-f="items" value="${esc(a.items.join(", "))}" placeholder="${i === 0 ? "Produce, fruit, herbs" : "Bakery, bread, cakes"}"></label>`;
+  return `<div class="rw" data-i="${i}">
+    <div class="r1">
+      <label class="fld code">Code<input data-f="no" value="${esc(a.no)}" placeholder="7, A1 or blank" maxlength="5"></label>
+      <div class="fld"><span class="lbl">Orientation</span><div class="orient" role="radiogroup" aria-label="Orientation, row ${i + 1}">
+        <button data-o="h" aria-pressed="${a.orient === "h"}" title="Horizontal: runs left to right">${ICON_H}</button>
+        <button data-o="v" aria-pressed="${a.orient === "v"}" title="Vertical: runs away from you">${ICON_V}</button></div></div>
+      ${flowCtl}
+      <div class="fld ph"><span class="lbl">Photo</span><button class="phbtn" data-photo="${i}" title="Add photos to fill in categories" aria-label="Photos for row ${i + 1}">${ICON_CAM}${photoCount(a.id) ? `<span class="badge">${photoCount(a.id)}</span>` : ""}</button></div>
+    </div>
+    <div class="r2">${cats}</div>
+    <p class="err rowerr" hidden></p>
+  </div>`;
+}
+
 function stepList() {
   const S = app.S;
   $("#wizard").innerHTML = `<section class="card">
     <h2>Describe each aisle</h2>
-    <p class="lede">Leave the code blank for sections that don't have one, like Produce or Bakery. Categories are what's on the shelves. Use the camera to fill them from photos.</p>
-    <div class="rows" id="rows">
-      <div class="rh"><span>Aisle code</span><span>Aisle categories</span><span>Photo</span><span>Orientation <button class="ibtn" id="oInfo" aria-label="How to pick orientation">i</button></span></div>
-      ${S.aisles.map((a, i) => `<div class="rw" data-i="${i}">
-        <div class="c-code"><input data-f="no" value="${esc(a.no)}" placeholder="e.g. 7 or A1" maxlength="5" aria-label="Aisle code, row ${i + 1}"></div>
-        <div class="c-cats"><input data-f="items" value="${esc(a.items.join(", "))}" placeholder="${i === 0 ? "Produce, fruit, herbs" : "Cereal, oatmeal, syrup"}" aria-label="Aisle categories, row ${i + 1}"></div>
-        <div class="c-ph"><button class="phbtn" data-photo="${i}" title="Add photos to fill in categories" aria-label="Photos for row ${i + 1}">${ICON_CAM}${photoCount(a.id) ? `<span class="badge">${photoCount(a.id)}</span>` : ""}</button></div>
-        <div class="c-or orient" role="radiogroup" aria-label="Orientation, row ${i + 1}">
-          <button data-o="h" aria-pressed="${a.orient === "h"}" title="Horizontal: runs left to right">${ICON_H}</button>
-          <button data-o="v" aria-pressed="${a.orient === "v"}" title="Vertical: runs away from you">${ICON_V}</button>
-        </div></div>`).join("")}
-    </div>
+    <p class="lede">Leave the code blank for sections without one, like Produce or Bakery. For numbered aisles, choose the walk direction, then list what's on each side.
+      <span class="infos"><button class="linkish" id="oInfo">How orientation works</button> · <button class="linkish" id="sInfo">How sides work</button></span></p>
+    <div class="rows" id="rows">${S.aisles.map(rowHtml).join("")}</div>
     <p class="err" id="wErr" hidden></p>
     <div class="nav"><button class="ghost" id="wBack">Back</button><div class="r"><button class="ghost" id="wAdd">Add a row</button><button class="primary" id="wNext">Next: neighbors</button></div></div>
   </section>`;
 
+  const rerow = (i, focusField) => {
+    const old = $(`#rows .rw[data-i="${i}"]`);
+    old.outerHTML = rowHtml(S.aisles[i], i);
+    if (focusField) {
+      const inp = $(`#rows .rw[data-i="${i}"] [data-f="${focusField}"]`);
+      if (inp) { inp.focus(); inp.setSelectionRange?.(inp.value.length, inp.value.length); }
+    }
+  };
+
   $("#oInfo").onclick = showOrientInfo;
+  $("#sInfo").onclick = showSidesInfo;
   $("#rows").addEventListener("input", (e) => {
     const r = e.target.closest(".rw"); if (!r) return;
-    const a = S.aisles[+r.dataset.i];
-    if (e.target.dataset.f === "no") a.no = e.target.value.trim(); else a.items = parseItems(e.target.value);
-    syncDerived(a);
-    r.classList.remove("bad");
-    save();
-  });
-  $("#rows").addEventListener("click", (e) => {
-    const ph = e.target.closest("[data-photo]");
-    if (ph) { openPhotos(S.aisles[+ph.dataset.photo]); return; }
-    const b = e.target.closest("[data-o]"); if (!b) return;
-    const r = b.closest(".rw"), a = S.aisles[+r.dataset.i];
-    a.orient = b.dataset.o;
-    r.querySelectorAll("[data-o]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    const i = +r.dataset.i, a = S.aisles[i], f = e.target.dataset.f;
+    if (f === "no") {
+      const wasAisle = !!a.no;
+      a.no = e.target.value.trim();
+      syncDerived(a);
+      if (wasAisle !== !!a.no) rerow(i, "no"); // aisle ↔ section: different fields
+    } else {
+      a[f] = parseItems(e.target.value);
+      syncDerived(a);
+    }
     r.classList.remove("bad");
     markDirty();
     save();
+  });
+  $("#rows").addEventListener("click", (e) => {
+    const r = e.target.closest(".rw"); if (!r) return;
+    const i = +r.dataset.i, a = S.aisles[i];
+    const ph = e.target.closest("[data-photo]");
+    if (ph) { openPhotos(a); return; }
+    const o = e.target.closest("[data-o]"), fl = e.target.closest("[data-flow]");
+    if (o) setOrient(a, o.dataset.o);
+    else if (fl) setFlow(a, fl.dataset.flow); // reversing swaps the left/right lists
+    else return;
+    syncDerived(a);
+    markDirty();
+    save();
+    rerow(i);
   });
   $("#wBack").onclick = () => go("count");
   $("#wAdd").onclick = () => {
@@ -149,10 +193,16 @@ function stepList() {
   };
   $("#wNext").onclick = () => {
     const bad = incompleteRows(S);
-    document.querySelectorAll(".rw").forEach((r) => r.classList.toggle("bad", bad.includes(+r.dataset.i)));
+    document.querySelectorAll(".rw").forEach((r) => {
+      const problem = rowProblem(S.aisles[+r.dataset.i]), msg = r.querySelector(".rowerr");
+      r.classList.toggle("bad", !!problem);
+      msg.hidden = !problem;
+      msg.textContent = problem;
+    });
     if (bad.length) {
       const e = $("#wErr"); e.hidden = false;
-      e.textContent = `${bad.length} row${bad.length > 1 ? "s need" : " needs"} a code or category, and an orientation.`;
+      e.textContent = `${bad.length} row${bad.length > 1 ? "s need" : " needs"} attention.`;
+      document.querySelector(".rw.bad")?.scrollIntoView({ block: "center" });
       return;
     }
     S.aisles.forEach(syncDerived);
@@ -194,17 +244,13 @@ function neighborSvg(a) {
 
 function stepNeighbors() {
   const S = app.S, i = Math.min(S.cur || 0, S.aisles.length - 1), a = S.aisles[i], last = i === S.aisles.length - 1;
-  const flowText = a.flow ? FLOWS[a.flow][0] : "Not set yet";
   $("#wizard").innerHTML = `<section class="card">
     <div class="jump" aria-label="Jump to aisle">${S.aisles.map((x, j) => `<button data-j="${j}" class="${Object.keys(x.nb).length ? "has" : ""}" ${j === i ? 'aria-current="true"' : ""} title="${esc(shortLabel(x))}">${esc(x.no || cap(x.items[0] || "?").slice(0, 4))}</button>`).join("")}</div>
     <div><p class="hint" style="margin:0 0 4px">${i + 1} of ${S.aisles.length}</p><h2>What's next to ${esc(aisleTitle(a))}?</h2></div>
     <p class="lede">Tap a point and pick what sits right beside it at that spot. The top of the box faces the back of the store, the bottom faces the entrance. Some points may already be filled in from earlier answers.</p>
     <div class="nbgrid">
       <div class="nbstage">${neighborSvg(a)}</div>
-      <div style="display:grid;gap:12px;min-width:0">
-        <ul class="ptlist">${PTS.map((p) => `<li><button data-p="${p}"><b>${PT_NAME[p]}</b><span class="${a.nb[p] ? "" : "empty"}">${esc(nbLabel(S, a.nb[p]) || "Not set")}</span></button></li>`).join("")}</ul>
-        <button class="flowbtn" id="flowBtn">${flowIllus(a.flow || (a.orient === "h" ? "lr" : "cf"))}<span>Which way does ${esc(aisleTitle(a))} flow?<small>${flowText}</small></span></button>
-      </div>
+      <ul class="ptlist">${PTS.map((p) => `<li><button data-p="${p}"><b>${PT_NAME[p]}</b><span class="${a.nb[p] ? "" : "empty"}">${esc(nbLabel(S, a.nb[p]) || "Not set")}</span></button></li>`).join("")}</ul>
     </div>
     <div class="nav"><button class="ghost" id="wBack">${i === 0 ? "Back to aisle list" : "Previous aisle"}</button>
       <div class="r">${last ? "" : '<button class="ghost" id="wSkip">Skip to map</button>'}<button class="primary" id="wNext">${last ? "Generate map" : "Next aisle"}</button></div></div>
@@ -215,7 +261,6 @@ function stepNeighbors() {
     g.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPicker(a, g.dataset.p); } };
   });
   $("#wizard").querySelectorAll("[data-j]").forEach((b) => (b.onclick = () => go("nb", +b.dataset.j)));
-  $("#flowBtn").onclick = () => openFlow(a);
   $("#wBack").onclick = () => (i === 0 ? go("list") : go("nb", i - 1));
   $("#wNext").onclick = () => (last ? finishToMap() : go("nb", i + 1));
   if ($("#wSkip")) $("#wSkip").onclick = finishToMap;
@@ -244,17 +289,4 @@ function openPicker(a, p) {
       save(); closeModal(); stepNeighbors();
     }));
   });
-}
-
-function openFlow(a) {
-  const fits = a.orient === "h" ? ["lr", "rl"] : ["cf", "fc"];
-  const order = [...fits, ...Object.keys(FLOWS).filter((k) => !fits.includes(k))];
-  openModal(`<h3>Which way does ${esc(aisleTitle(a))} flow?</h3>
-    <p>Stand at the entrance facing in. Pick the direction the aisle runs from its first shelf to its last. The first two options fit a ${a.orient === "h" ? "horizontal" : "vertical"} aisle.</p>
-    <div class="flowgrid">${order.map((k) => `<button class="flowopt" data-f="${k}" aria-pressed="${a.flow === k}">${flowIllus(k)}<b>${FLOWS[k][0]}</b><small>${FLOWS[k][1]}</small></button>`).join("")}</div>
-    <div class="nav" style="padding-top:12px">${a.flow ? '<button class="danger ghost" data-f="">Clear</button>' : "<span></span>"}<button class="ghost" data-close>Cancel</button></div>`,
-  (sheet) => sheet.querySelectorAll("[data-f]").forEach((b) => (b.onclick = () => {
-    a.flow = b.dataset.f || null;
-    markDirty(); save(); closeModal(); stepNeighbors();
-  })));
 }

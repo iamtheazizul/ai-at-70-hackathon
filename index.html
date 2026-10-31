@@ -10,17 +10,24 @@
 <body>
 
 <header>
-  <h1>Aisle Mapper</h1>
+  <button class="brand" id="brand" aria-label="Aisle Mapper home"><h1>Aisle Mapper</h1></button>
   <span class="storeline" id="storeLine"></span>
+  <div class="seg modes" id="modes" role="group" aria-label="Mode" hidden>
+    <button id="mShop" aria-pressed="false">Shop</button><button id="mMap" aria-pressed="false">Map a store</button>
+  </div>
   <div class="hdr-actions" id="mapActions" hidden>
     <button id="btnSetup" class="ghost">Edit answers</button>
     <button id="btnRegen">Regenerate</button>
-    <button id="btnNew" class="ghost">New store</button>
+    <button id="btnStores" class="ghost">My stores</button>
   </div>
 </header>
-<nav class="steps" id="steps" aria-label="Progress"></nav>
 
-<main id="wizard" class="wiz"></main>
+<main id="home" class="wiz" hidden></main>
+<main id="picker" class="wiz" hidden></main>
+<main id="shop" class="shopwrap" hidden></main>
+
+<nav class="steps" id="steps" aria-label="Progress" hidden></nav>
+<main id="wizard" class="wiz" hidden></main>
 
 <div class="app" id="customizer" hidden>
   <aside class="panel">
@@ -35,7 +42,11 @@
           <label>Kind<select id="fKind"><option value="aisle">Aisle</option><option value="wall">Section</option></select></label>
           <label>Department<select id="fDept"></select></label>
         </div>
-        <label>Categories / items (comma separated)<textarea id="fItems" placeholder="oatmeal, granola, pancake mix"></textarea></label>
+        <div id="fSidesWrap" class="row2">
+          <label>Left side (in walking order)<textarea id="fLeft" placeholder="cereal, oatmeal"></textarea></label>
+          <label>Right side (in walking order)<textarea id="fRight" placeholder="pancake mix, syrup"></textarea></label>
+        </div>
+        <label id="fItemsWrap" hidden>Categories (comma separated)<textarea id="fItems" placeholder="bread, bagels, cakes"></textarea></label>
         <div class="toolbar">
           <button class="primary" type="submit" id="fSubmit">Add aisle</button>
           <button type="button" id="fCancel" class="ghost" hidden>Cancel</button>
@@ -84,7 +95,7 @@
     <div class="hint" id="hint3d" hidden>Drag to orbit · scroll or pinch to zoom · right-drag or two-finger drag to pan · click a shelf to select it. Move things in the 2D plan; 3D follows.</div>
     <div class="legend" id="legend"></div>
     <div class="panel sec trip" id="tripBox">
-      <h2>Plan a trip</h2>
+      <h2>Test a trip</h2>
       <label>Shopping list, one per line or comma separated<textarea id="tripList" placeholder="milk&#10;peanut butter&#10;bananas&#10;chips"></textarea></label>
       <div class="toolbar"><button class="primary" id="btnTrip">Find shortest route</button><button class="ghost" id="btnTripClear" hidden>Clear route</button></div>
       <div id="tripOut" style="display:grid;gap:10px"></div>

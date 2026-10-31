@@ -2,6 +2,7 @@
 // shelves and counters are blocked, everything else is walkway.
 
 import { dimsOf } from "../core/model.js";
+import { shelfStrips } from "../core/geometry.js";
 
 export const RES = 0.5; // map cells per grid step → one step = 1 ft
 
@@ -37,7 +38,8 @@ export function floorGrid(S) {
     const x1 = Math.min(gw, Math.ceil((o.x + o.w) / RES)), y1 = Math.min(gh, Math.ceil((o.y + o.h) / RES));
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) blk[y * gw + x] = 1;
   };
-  S.aisles.forEach((a) => a.x != null && mark(a));
+  // only the shelves block walking; an aisle's walkway stays open
+  S.aisles.forEach((a) => a.x != null && shelfStrips(a).forEach(mark));
   (S.fixtures || []).filter((f) => f.kind === "fixture").forEach(mark);
   return { gw, gh, blk, free: (x, y) => x >= 0 && y >= 0 && x < gw && y < gh && !blk[y * gw + x] };
 }
@@ -51,9 +53,11 @@ export function nearestFree(G, x, y) {
   return [x, y];
 }
 
-/** Where a shopper stands to shop an object: the open long side with the widest walkway. */
+/** Where a shopper stands to shop an object. Aisles: the middle of their walkway.
+ *  Sections: the open long side with the widest walkway in front of it. */
 export function standPoint(G, o) {
   if (o.kind === "door") return nearestFree(G, Math.floor((o.x + o.w / 2) / RES), G.gh - 1);
+  if (o.kind === "aisle") return nearestFree(G, Math.floor((o.x + o.w / 2) / RES), Math.floor((o.y + o.h / 2) / RES));
   const cx = o.x + o.w / 2, cy = o.y + o.h / 2, vert = o.h > o.w;
   const longSides = vert ? [[o.x - 0.5, cy, -1, 0], [o.x + o.w + 0.5, cy, 1, 0]] : [[cx, o.y - 0.5, 0, -1], [cx, o.y + o.h + 0.5, 0, 1]];
   const ends = vert ? [[cx, o.y - 0.5, 0, -1], [cx, o.y + o.h + 0.5, 0, 1]] : [[o.x - 0.5, cy, -1, 0], [o.x + o.w + 0.5, cy, 1, 0]];

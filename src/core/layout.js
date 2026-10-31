@@ -4,21 +4,29 @@
 import { GAP, OPP, DEFAULT_W, DEFAULT_H } from "./constants.js";
 import { syncDerived } from "./model.js";
 
-/** Footprint in cells. Coded aisles are long shelving runs; sections are deeper and shorter. */
+/**
+ * Footprint in cells. A coded aisle is 10 ft wide (2 ft shelf + 6 ft walkway + 2 ft shelf)
+ * and 30 ft long. A section is a 6 ft deep, 24 ft long block.
+ */
 export function sizeOf(a) {
   const section = !a.no;
-  if (a.orient === "h") return section ? { w: 12, h: 3 } : { w: 15, h: 1.5 };
-  return section ? { w: 3, h: 12 } : { w: 1.5, h: 15 };
+  if (a.orient === "h") return section ? { w: 12, h: 3 } : { w: 15, h: 5 };
+  return section ? { w: 3, h: 12 } : { w: 5, h: 15 };
 }
 
-/** Where B goes when it sits at point p of A, with a walkway in between. */
-export function relPos(A, B, p) {
+/** Two coded aisles running the same way, side by side, share a double-sided shelf: no gap. */
+const backToBack = (A, B) => A.no && B.no && A.orient && A.orient === B.orient;
+const isLongSide = (A, p) => (A.orient === "h" ? p === "n" || p === "s" : p === "e" || p === "w");
+export const gapBetween = (A, B, p) => (backToBack(A, B) && isLongSide(A, p) ? 0 : GAP);
+
+/** Where B goes when it sits at point p of A, with a walkway (or no gap) in between. */
+export function relPos(A, B, p, gap = GAP) {
   let x = A.x + A.w / 2 - B.w / 2;
   let y = A.y + A.h / 2 - B.h / 2;
-  if (p.includes("e")) x = A.x + A.w + GAP;
-  if (p.includes("w")) x = A.x - GAP - B.w;
-  if (p.includes("n")) y = A.y - GAP - B.h;
-  if (p.includes("s")) y = A.y + A.h + GAP;
+  if (p.includes("e")) x = A.x + A.w + gap;
+  if (p.includes("w")) x = A.x - gap - B.w;
+  if (p.includes("n")) y = A.y - gap - B.h;
+  if (p.includes("s")) y = A.y + A.h + gap;
   return { x, y };
 }
 
@@ -55,7 +63,11 @@ export function generateFromAnswers(S) {
   if (usesChk) nodes.set("chk", chk);
 
   const placed = [], done = new Set();
-  const hits = (n) => placed.some((o) => n.x < o.x + o.w + 1 && n.x + n.w + 1 > o.x && n.y < o.y + o.h + 1 && n.y + n.h + 1 > o.y);
+  // Overlap test with breathing room (1 cell), except aisles that may sit back to back.
+  const hits = (n) => placed.some((o) => {
+    const pad = backToBack(n, o) ? -0.01 : 1;
+    return n.x < o.x + o.w + pad && n.x + n.w + pad > o.x && n.y < o.y + o.h + pad && n.y + n.h + pad > o.y;
+  });
   const put = (n, x, y, d) => {
     n.x = x; n.y = y;
     for (let k = 0; hits(n) && k < 500; k++) { n.x += d.x * 0.5; n.y += d.y * 0.5; }
@@ -71,7 +83,7 @@ export function generateFromAnswers(S) {
       const A = queue.shift();
       for (const [tid, p] of edges.get(A.id) || []) {
         if (done.has(tid)) continue;
-        const B = nodes.get(tid), r = relPos(A, B, p);
+        const B = nodes.get(tid), r = relPos(A, B, p, gapBetween(A, B, p));
         put(B, r.x, r.y, dirOf(p));
         queue.push(B);
       }
@@ -122,8 +134,9 @@ export function generateSimple(S) {
   place(left, (i, n) => { const s = Math.floor((H - 14) / n); return { x: 1, y: 6 + i * s, w: 3, h: s - 1 }; });
   place(right, (i, n) => { const s = Math.floor((H - 14) / n); return { x: W - 4, y: 6 + i * s, w: 3, h: s - 1 }; });
   aisles.sort((a, b) => (parseFloat(a.no) || 0) - (parseFloat(b.no) || 0) || String(a.no).localeCompare(b.no));
-  const n = Math.max(aisles.length, 1), pitch = Math.min(4, (W - 14) / n), sx = 7 + ((W - 14) - pitch * n) / 2;
-  aisles.forEach((a, i) => Object.assign(a, { x: Math.round(sx + i * pitch + (pitch - 1.5) / 2), y: 7, w: 1.5, h: 15 }));
+  // aisles side by side, back to back, numbered left to right
+  const n = Math.max(aisles.length, 1), aw = Math.min(5, (W - 14) / n), sx = 7 + ((W - 14) - aw * n) / 2;
+  aisles.forEach((a, i) => Object.assign(a, { orient: "v", x: sx + i * aw, y: 7, w: aw, h: 15 }));
   S.fixtures = [
     { id: "chk", name: "Checkout", kind: "fixture", x: 10, y: H - 6, w: 20, h: 2.5 },
     { id: "ent", name: "Entrance", kind: "door", x: W - 14, y: H - 1.2, w: 9, h: 1.2 },

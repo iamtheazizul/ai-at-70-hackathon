@@ -83,3 +83,44 @@ test("planTrip rejects an empty list", () => {
   const S = generateFromAnswers(exampleStore());
   assert.ok(planTrip(S, "  ").error);
 });
+
+/* ---------- aisle sides ---------- */
+import { setFlow, setOrient, effectiveFlow, syncDerived, rowProblem } from "../src/core/model.js";
+import { spotPoint, wallFor, shelfStrips } from "../src/core/geometry.js";
+import { RES } from "../src/routing/floorGrid.js";
+
+test("reversing flow swaps left and right so shelves stay put", () => {
+  const a = Object.assign(newAisle(), { no: "4", orient: "v", flow: "cf", left: ["jam"], right: ["honey"] });
+  syncDerived(a);
+  setFlow(a, "fc");
+  assert.deepEqual([a.left, a.right], [["honey"], ["jam"]]);
+  assert.equal(wallFor(a, "right"), "west"); // jam is still on the west shelf
+});
+
+test("changing orientation clears a flow that no longer fits", () => {
+  const a = Object.assign(newAisle(), { no: "1", orient: "v", flow: "cf" });
+  setOrient(a, "h");
+  assert.equal(a.flow, null);
+  assert.equal(effectiveFlow(a), "lr");
+  assert.match(rowProblem(a), /flows/);
+});
+
+test("spot points follow flow and side", () => {
+  const a = Object.assign(newAisle(), { no: "4", kind: "aisle", orient: "v", flow: "fc", x: 10, y: 5, w: 5, h: 15 });
+  const first = spotPoint(a, "left", 0, 2), second = spotPoint(a, "left", 1, 2);
+  assert.ok(first.y < second.y, "fc starts at the back (top) and walks toward the entrance");
+  assert.ok(first.x > 10 + 2.5, "walking toward the entrance, your left is the east shelf");
+  assert.equal(shelfStrips(a).length, 2);
+});
+
+test("side-by-side aisles sit back to back; routes stop at the item's shelf", () => {
+  const S = generateFromAnswers(exampleStore());
+  const a3 = S.aisles.find((a) => a.no === "3"), a4 = S.aisles.find((a) => a.no === "4");
+  assert.equal(a4.x, a3.x + a3.w, "no gap between aisle 3 and 4");
+  const trip = planTrip(S, "peanut butter");
+  const leg = trip.legs.find((l) => l.products.some((p) => p.product === "peanut butter"));
+  assert.equal(leg.aisleId, a4.id);
+  assert.equal(leg.side, "left");
+  const [cx] = leg.cells.at(-1), x = (cx + 0.5) * RES;
+  assert.ok(x > a4.x + a4.w / 2, "stands at the east shelf (left when walking fc)");
+});

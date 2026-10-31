@@ -34,10 +34,25 @@ export const PT_NAME = { nw: "Back left", n: "Back", ne: "Back right", e: "Right
 export const SPECIAL = { wall: "Store wall", entrance: "Entrance", checkout: "Checkout", open: "Open floor" };
 
 export const FLOWS = {
-  cf: ["Closest → furthest", "Starts near you, runs to the back"],
-  fc: ["Furthest → closest", "Starts at the back, runs toward you"],
-  lr: ["Left → right", "Starts on your left"],
-  rl: ["Right → left", "Starts on your right"],
+  cf: ["Closest → furthest", "Walk from the entrance side to the back"],
+  fc: ["Furthest → closest", "Walk from the back toward the entrance"],
+  lr: ["Left → right", "Walk from the left wall to the right wall"],
+  rl: ["Right → left", "Walk from the right wall to the left wall"],
 };
+// Flows that fit each orientation (v = vertical, h = horizontal). The first is the default.
+export const FLOWS_FOR = { v: ["cf", "fc"], h: ["lr", "rl"] };
+export const REVERSE_FLOW = { cf: "fc", fc: "cf", lr: "rl", rl: "lr" };
+
+// A coded aisle is a walkway with a shelf strip on each side.
+// While walking in the flow direction, which physical shelf is on your left / right?
+// (north = back of store, south = entrance side, west = left wall, east = right wall)
+export const SIDE_TO_WALL = {
+  cf: { left: "west", right: "east" },
+  fc: { left: "east", right: "west" },
+  lr: { left: "north", right: "south" },
+  rl: { left: "south", right: "north" },
+};
+export const SHELF_DEPTH = 1; // cells (2 ft) per shelf strip
+export const M_PER_CELL = 0.6096; // 2 ft in metres, for the database
 
 export const STAGES = [["address", "Store"], ["count", "How many"], ["list", "Aisles"], ["nb", "Neighbors"], ["map", "Map"]];

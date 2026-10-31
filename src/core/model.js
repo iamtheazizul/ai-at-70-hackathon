@@ -1,7 +1,13 @@
-// Store data model: creating stores and aisles, derived fields, neighbour answers.
+// Store data model: creating stores and aisles, derived fields, neighbour answers, flow and sides.
 // Pure functions — no DOM — so they run in the browser and in Node.
+//
+// Two kinds of shape:
+//   aisle   (has a code, kind "aisle"): a walkway with shelves on both sides.
+//           Categories live in a.left / a.right, in shelf order, as you walk in the flow direction.
+//           a.items is derived: [...left, ...right].
+//   section (no code, kind "wall"): Produce, Bakery… one block, categories in a.items.
 
-import { DEPTS, KEYWORDS, OPP, SPECIAL, DEFAULT_W, DEFAULT_H } from "./constants.js";
+import { DEPTS, KEYWORDS, OPP, SPECIAL, DEFAULT_W, DEFAULT_H, FLOWS_FOR, REVERSE_FLOW } from "./constants.js";
 
 export const uid = () => Math.random().toString(36).slice(2, 9);
 export const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
@@ -9,14 +15,43 @@ export const parseItems = (s) => s.split(/[,\n]/).map((x) => x.trim()).filter(Bo
 export const dimsOf = (S) => ({ W: S.W || DEFAULT_W, H: S.H || DEFAULT_H });
 export const byId = (S, id) => S.aisles.find((a) => a.id === id);
 export const shelfFt = (a) => a.ht || (a.kind === "wall" ? 5 : 6);
+export const isAisle = (a) => a.kind === "aisle";
 
 export function blankStore() {
-  return { name: "", address: "", count: 0, stage: "address", cur: 0, reached: 0, aisles: [], fixtures: [], placed: false };
+  return { id: uid(), name: "", address: "", count: 0, stage: "address", cur: 0, reached: 0, aisles: [], fixtures: [], placed: false };
 }
 
 export function newAisle() {
-  return { id: uid(), no: "", items: [], orient: null, flow: null, nb: {}, dept: "Other", kind: "aisle", name: "", color: DEPTS.Other };
+  return { id: uid(), no: "", items: [], left: [], right: [], orient: null, flow: null, nb: {}, dept: "Other", kind: "aisle", name: "", color: DEPTS.Other };
 }
+
+/* ---------- orientation, flow, sides ---------- */
+
+/** "v" or "h". Once placed on the map, the shape's real proportions win. */
+export const orientOf = (a) => (a.w != null && a.h != null ? (a.h >= a.w ? "v" : "h") : a.orient || "v");
+
+/** The flow to use: the contributor's answer if it fits the orientation, else the default for it. */
+export function effectiveFlow(a) {
+  const fits = FLOWS_FOR[orientOf(a)];
+  return a.flow && fits.includes(a.flow) ? a.flow : fits[0];
+}
+
+export function setOrient(a, o) {
+  a.orient = o;
+  if (a.flow && !FLOWS_FOR[o].includes(a.flow)) a.flow = null; // old flow no longer makes sense
+}
+
+/** Reversing the walking direction swaps what's on your left and right, so swap the lists
+ *  to keep every category on the same physical shelf. */
+export function setFlow(a, f) {
+  if (a.flow && f === REVERSE_FLOW[a.flow]) {
+    [a.left, a.right] = [a.right, a.left];
+    a.items = [...a.left, ...a.right];
+  }
+  a.flow = f;
+}
+
+/* ---------- derived fields ---------- */
 
 export function guessDept(a) {
   const t = (a.items.join(" ") + " " + (a.customName ? a.name : "")).toLowerCase();
@@ -24,9 +59,16 @@ export function guessDept(a) {
   return "Other";
 }
 
-/** Recompute kind, department, color and display name from what the contributor entered. */
+/** Recompute kind, item list, department, color and display name from what the contributor entered. */
 export function syncDerived(a) {
   a.kind = a.no ? "aisle" : "wall"; // no code → a section such as Produce
+  a.left = a.left || [];
+  a.right = a.right || [];
+  if (a.kind === "aisle") {
+    // a section that just got a code keeps its categories, on the left side
+    if (!a.left.length && !a.right.length && a.items.length) a.left = [...a.items];
+    a.items = [...a.left, ...a.right];
+  }
   if (!a.customDept) {
     a.dept = guessDept(a);
     if (!a.customColor) a.color = DEPTS[a.dept];
@@ -36,6 +78,8 @@ export function syncDerived(a) {
 
 export const aisleTitle = (a) => (a.no ? `aisle ${a.no}` : cap(a.items[0]) || "this section");
 export const shortLabel = (a) => (a.no ? `${a.no} · ${cap(a.items[0] || "")}` : cap(a.items[0] || "Section"));
+
+/* ---------- neighbours ---------- */
 
 export function nbLabel(S, v) {
   if (!v) return "";
@@ -72,21 +116,27 @@ export function setAisleCount(S, n) {
   }
 }
 
-/** Rows that can't be generated yet: they need a code or category, and an orientation. */
-export const incompleteRows = (S) =>
-  S.aisles.map((a, i) => ((!a.items.length && !a.no) || !a.orient ? i : -1)).filter((i) => i >= 0);
+/** What's missing on a row, or "" when it's complete. */
+export function rowProblem(a) {
+  if (!a.no && !a.items.length) return "Add a code or a category";
+  if (!a.orient) return "Pick an orientation";
+  if (a.no && !a.flow) return "Pick which way the aisle flows";
+  return "";
+}
+export const incompleteRows = (S) => S.aisles.map((a, i) => (rowProblem(a) ? i : -1)).filter((i) => i >= 0);
 
 /** Fill in missing fields on store JSON that came from somewhere else. */
 export function normalizeImported(d) {
   if (!d || !Array.isArray(d.aisles)) throw new Error('Store JSON needs an "aisles" list');
   d.aisles.forEach((a) => {
     a.id = a.id || uid(); a.items = a.items || []; a.nb = a.nb || {}; a.no = a.no || "";
+    a.left = a.left || []; a.right = a.right || [];
     a.dept = a.dept in DEPTS ? a.dept : "Other";
     a.kind = a.kind || (a.no ? "aisle" : "wall");
     a.name = a.name || a.items[0] || "Section";
     a.orient = a.orient || ((a.h || 0) > (a.w || 1) ? "v" : "h");
   });
-  return { ...blankStore(), ...d, stage: "map", reached: 4 };
+  return { ...blankStore(), ...d, id: d.id || uid(), stage: "map", reached: 4 };
 }
 
 /* --- search helpers shared by the 2D and 3D views --- */

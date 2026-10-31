@@ -24,6 +24,30 @@ export function orientIllus() {
   <text x="190" y="264" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--muted)">ENTRANCE</text></svg>`;
 }
 
+// Walking-direction buttons, as seen from above with the entrance at the bottom.
+const arrow = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+export const ICON_FLOW = {
+  cf: arrow("M12 20V5M6 11l6-6 6 6"),
+  fc: arrow("M12 4v15M6 13l6 6 6-6"),
+  lr: arrow("M4 12h15M13 6l6 6-6 6"),
+  rl: arrow("M20 12H5M11 6l-6 6 6 6"),
+};
+
+/** An aisle from above: both shelves labelled L / R for someone walking in direction f. */
+export function sidesIllus(f) {
+  const vert = f === "cf" || f === "fc";
+  const WALL = { cf: { left: "west", right: "east" }, fc: { left: "east", right: "west" }, lr: { left: "north", right: "south" }, rl: { left: "south", right: "north" } }[f];
+  const strip = { west: [30, 12, 14, 76], east: [76, 12, 14, 76], north: [10, 28, 100, 14], south: [10, 66, 100, 14] };
+  const shelves = vert ? ["west", "east"] : ["north", "south"];
+  const label = (wall) => (WALL.left === wall ? "L" : "R");
+  const arrows = { cf: "M60 80 V24 M53 32 L60 22 L67 32", fc: "M60 20 V76 M53 68 L60 78 L67 68", lr: "M22 54 H96 M88 47 L98 54 L88 61", rl: "M98 54 H24 M32 47 L22 54 L32 61" };
+  return `<svg viewBox="0 0 120 120" aria-hidden="true">
+    ${shelves.map((w) => { const [x, y, ww, hh] = strip[w]; return `<rect x="${x}" y="${y}" width="${ww}" height="${hh}" rx="2" fill="var(--accent)"/><text x="${x + ww / 2}" y="${y + hh / 2}" text-anchor="middle" dominant-baseline="central" font-family="var(--mono)" font-weight="700" font-size="11" fill="var(--accent-ink)">${label(w)}</text>`; }).join("")}
+    <path d="${arrows[f]}" stroke="var(--ink)" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="10" y1="104" x2="110" y2="104" stroke="var(--muted)" stroke-dasharray="3 3"/>
+    <text x="60" y="117" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--muted)">ENTRANCE</text></svg>`;
+}
+
 /** One flow option: an aisle with an arrow, seen from the entrance. */
 export function flowIllus(f) {
   const vert = f === "cf" || f === "fc";

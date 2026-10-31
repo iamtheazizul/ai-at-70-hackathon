@@ -3,8 +3,9 @@
 
 import { DEPTS } from "../core/constants.js";
 import { dimsOf, shelfFt, isHit } from "../core/model.js";
+import { shelfStrips } from "../core/geometry.js";
 import { RES } from "../routing/floorGrid.js";
-import { app, hooks, setView } from "./app.js";
+import { app, hooks, savePrefs } from "./app.js";
 import { $, css } from "./dom.js";
 
 let T = null; // three.js objects once initialised
@@ -164,20 +165,23 @@ export function build3d(q) {
     const col = new THREE.Color(a.color || DEPTS[a.dept] || DEPTS.Other);
     const mat = std(col, { transparent: !!dim, opacity: dim ? 0.18 : 1, emissive: hit && q ? new THREE.Color(css("--tag")) : new THREE.Color(0), emissiveIntensity: hit && q ? 0.35 : 0 });
     const cx = ox + a.x + a.w / 2, cz = oz + a.y + a.h / 2;
-    const body = new THREE.Mesh(new THREE.BoxGeometry(a.w, h, a.h), mat);
-    body.position.set(cx, h / 2, cz);
-    body.castShadow = !dim; body.receiveShadow = true; body.userData.id = a.id;
-    group.add(body); T.pick.push(body);
-    if (!dim) {
+    // aisles: one shelf unit per side with the walkway between; sections: one block
+    shelfStrips(a).forEach((s) => {
+      const sx = ox + s.x + s.w / 2, sz = oz + s.y + s.h / 2;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(s.w, h, s.h), mat);
+      body.position.set(sx, h / 2, sz);
+      body.castShadow = !dim; body.receiveShadow = true; body.userData.id = a.id;
+      group.add(body); T.pick.push(body);
+      if (dim) return;
       const ledge = std(col.clone().multiplyScalar(0.6)), n = Math.max(2, Math.round(shelfFt(a) / 1.5));
       for (let i = 1; i < n; i++) {
-        const l = new THREE.Mesh(new THREE.BoxGeometry(a.w + 0.12, 0.06, a.h + 0.12), ledge);
-        l.position.set(cx, (h * i) / n, cz); group.add(l);
+        const l = new THREE.Mesh(new THREE.BoxGeometry(s.w + 0.12, 0.06, s.h + 0.12), ledge);
+        l.position.set(sx, (h * i) / n, sz); group.add(l);
       }
-    }
+    });
     if (app.sel === a.id) {
       const e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(a.w + 0.25, h + 0.25, a.h + 0.25)), new THREE.LineBasicMaterial({ color: css("--ink") }));
-      e.position.copy(body.position); group.add(e);
+      e.position.set(cx, h / 2, cz); group.add(e);
     }
     if (!dim || app.sel === a.id) { const sp = labelSprite(a.no, a.name); sp.position.set(cx, h + 1.3, cz); group.add(sp); }
   });
@@ -202,7 +206,7 @@ export function setMode(three) {
   $("#v3").setAttribute("aria-pressed", three);
   $("#view2d").hidden = three; $("#view3d").hidden = !three; $("#hint3d").hidden = !three;
   $("#snapWrap").hidden = three; $("#btnCam").hidden = !three;
-  setView(three ? "3d" : "2d");
+  savePrefs();
   hooks.render();
   if (three) { size(); resetCamera(); }
 }
