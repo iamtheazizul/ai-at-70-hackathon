@@ -8,7 +8,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "apply-schema": "node scripts/apply-schema.mjs"
+    "apply-schema": "node scripts/apply-schema.mjs",
+    "check-schema": "node scripts/check-schema.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

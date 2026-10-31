@@ -1,89 +1,108 @@
-import { readFileSync } from "node:fs";
+// Apply every file in supabase/migrations, in name order, to the project's
+// Postgres.
+//
+// Why not the Management API: /v1/projects/{ref}/database/query authenticates
+// with a personal access token (sbp_...), not with a project secret key. The
+// earlier version of this script sent SUPABASE_SECRET_KEY there and got back
+// 401 "JWT could not be decoded" every time, which is why no schema has ever
+// been applied to this project.
+//
+// Why not psql "$SUPABASE_DB_URL": argv is world-readable in `ps`, and that URL
+// carries the database password. The URL is split into PG* environment
+// variables instead, so the password is never an argument.
+//
+// supabase/schema.sql is deliberately NOT applied here. It models the same
+// things as 0001_mvp.sql under different table names; see the banner at its top.
 
-function loadEnv(path) {
+import { spawnSync } from 'node:child_process';
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const root = new URL('../', import.meta.url);
+
+function loadEnv() {
   const values = {};
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const index = trimmed.indexOf("=");
-    if (index === -1) continue;
-    values[trimmed.slice(0, index)] = trimmed.slice(index + 1);
+  try {
+    for (const line of readFileSync(new URL('.env', root), 'utf8').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const index = trimmed.indexOf('=');
+      if (index === -1) continue;
+      values[trimmed.slice(0, index)] = trimmed.slice(index + 1);
+    }
+  } catch {
+    // No .env: fall through to the process environment.
   }
   return values;
 }
 
-function redact(text, secret) {
-  if (!secret) return text;
-  return text.split(secret).join("[redacted]");
-}
+const env = loadEnv();
+const raw = process.env.SUPABASE_DB_URL ?? env.SUPABASE_DB_URL ?? '';
 
-const env = loadEnv(new URL("../.env", import.meta.url));
-const secret = env.SUPABASE_SECRET_KEY ?? "";
-const url = env.SUPABASE_URL ?? "";
-const ref = url.replace("https://", "").replace(".supabase.co", "");
-const sql = readFileSync(new URL("../supabase/migrations/0001_mvp.sql", import.meta.url), "utf8");
-
-if (!secret || !ref) {
-  console.error("Missing SUPABASE_URL or SUPABASE_SECRET_KEY in .env");
+if (!raw) {
+  console.error(
+    [
+      'SUPABASE_DB_URL is not set.',
+      '',
+      'Supabase dashboard -> Project Settings -> Database -> Connection string',
+      '-> URI. Copy the one labelled Session pooler and put it in .env as',
+      '',
+      '  SUPABASE_DB_URL=postgresql://postgres.<ref>:<password>@<host>:5432/postgres',
+      '',
+      '.env is gitignored. Do not commit this value: it is a database password,',
+      'not a publishable key.',
+    ].join('\n'),
+  );
   process.exit(1);
 }
 
-const attempts = [
-  {
-    name: "management-bearer",
-    url: `https://api.supabase.com/v1/projects/${ref}/database/query`,
-    headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
-  },
-  {
-    name: "management-apikey",
-    url: `https://api.supabase.com/v1/projects/${ref}/database/query`,
-    headers: { apikey: secret, Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
-  },
-];
-
-let applied = false;
-for (const attempt of attempts) {
-  const response = await fetch(attempt.url, {
-    method: "POST",
-    headers: attempt.headers,
-    body: JSON.stringify({ query: sql }),
-  });
-  const body = redact(await response.text(), secret);
-  console.log(`${attempt.name} status ${response.status}`);
-  console.log(body.slice(0, 500));
-  if (response.ok) {
-    applied = true;
-    break;
-  }
-}
-
-if (!applied) {
-  const probe = await fetch(`https://${ref}.supabase.co/pg/query`, {
-    method: "POST",
-    headers: {
-      apikey: secret,
-      Authorization: `Bearer ${secret}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query: "select 1 as ok" }),
-  });
-  const probeBody = redact(await probe.text(), secret);
-  console.log(`pg-query status ${probe.status}`);
-  console.log(probeBody.slice(0, 300));
-  if (probe.ok) {
-    const apply = await fetch(`https://${ref}.supabase.co/pg/query`, {
-      method: "POST",
-      headers: {
-        apikey: secret,
-        Authorization: `Bearer ${secret}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ query: sql }),
-    });
-    const applyBody = redact(await apply.text(), secret);
-    console.log(`pg-query apply status ${apply.status}`);
-    console.log(applyBody.slice(0, 500));
-    if (apply.ok) process.exit(0);
-  }
+let url;
+try {
+  url = new URL(raw);
+} catch {
+  console.error('SUPABASE_DB_URL is not a valid URL. Expected postgresql://user:password@host:port/database');
   process.exit(1);
 }
+
+const migrations = readdirSync(new URL('supabase/migrations/', root))
+  .filter((name) => name.endsWith('.sql'))
+  .sort();
+
+if (migrations.length === 0) {
+  console.error('No .sql files in supabase/migrations.');
+  process.exit(1);
+}
+
+// Password goes through the environment, never argv.
+const pgEnv = {
+  ...process.env,
+  PGHOST: url.hostname,
+  PGPORT: url.port || '5432',
+  PGUSER: decodeURIComponent(url.username),
+  PGPASSWORD: decodeURIComponent(url.password),
+  PGDATABASE: url.pathname.replace(/^\//, '') || 'postgres',
+  PGSSLMODE: process.env.PGSSLMODE ?? 'require',
+};
+
+console.log(`Applying ${migrations.length} migration(s) to ${url.hostname}/${pgEnv.PGDATABASE} as ${pgEnv.PGUSER}`);
+
+for (const name of migrations) {
+  const file = fileURLToPath(new URL(`supabase/migrations/${name}`, root));
+  console.log(`\n-- ${name}`);
+  // ON_ERROR_STOP and a single transaction: a migration either lands whole or
+  // not at all, so a failure halfway cannot leave a half-built schema.
+  const result = spawnSync('psql', ['-v', 'ON_ERROR_STOP=1', '--single-transaction', '-f', file], {
+    env: pgEnv,
+    stdio: 'inherit',
+  });
+  if (result.error?.code === 'ENOENT') {
+    console.error('\npsql not found on PATH. brew install postgresql@15');
+    process.exit(1);
+  }
+  if (result.status !== 0) {
+    console.error(`\n${name} failed. Nothing from that file was applied.`);
+    process.exit(result.status ?? 1);
+  }
+}
+
+console.log('\nDone. Verify with: npm run check-schema');
