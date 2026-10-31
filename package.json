@@ -1,0 +1,15 @@
+{
+  "name": "aisle-mapper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contributor tool for mapping grocery stores, generating floor plans and planning shortest shopping routes.",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node --test",
+    "serve:static": "npx --yes serve ."
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

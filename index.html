@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aisle Mapper</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+
+<header>
+  <h1>Aisle Mapper</h1>
+  <span class="storeline" id="storeLine"></span>
+  <div class="hdr-actions" id="mapActions" hidden>
+    <button id="btnSetup" class="ghost">Edit answers</button>
+    <button id="btnRegen">Regenerate</button>
+    <button id="btnNew" class="ghost">New store</button>
+  </div>
+</header>
+<nav class="steps" id="steps" aria-label="Progress"></nav>
+
+<main id="wizard" class="wiz"></main>
+
+<div class="app" id="customizer" hidden>
+  <aside class="panel">
+    <div class="sec">
+      <h2 id="formTitle">Add an aisle</h2>
+      <form id="form" style="display:grid;gap:10px">
+        <div class="row">
+          <label>Code<input id="fNo" placeholder="7" maxlength="5"></label>
+          <label>Name<input id="fName" placeholder="Cereal & Breakfast" required></label>
+        </div>
+        <div class="row2">
+          <label>Kind<select id="fKind"><option value="aisle">Aisle</option><option value="wall">Section</option></select></label>
+          <label>Department<select id="fDept"></select></label>
+        </div>
+        <label>Categories / items (comma separated)<textarea id="fItems" placeholder="oatmeal, granola, pancake mix"></textarea></label>
+        <div class="toolbar">
+          <button class="primary" type="submit" id="fSubmit">Add aisle</button>
+          <button type="button" id="fCancel" class="ghost" hidden>Cancel</button>
+          <button type="button" id="fDelete" class="danger ghost" hidden>Delete</button>
+        </div>
+      </form>
+    </div>
+    <div class="sec" id="inspector" hidden>
+      <h2>Shape on map</h2>
+      <div class="row2">
+        <label>Width (ft)<input id="iW" type="number" min="2" step="2"></label>
+        <label>Length (ft)<input id="iH" type="number" min="2" step="2"></label>
+        <label>Shelf height (ft)<input id="iZ" type="number" min="1" max="14" step="1"></label>
+        <label>Color<input id="iC" type="color" style="padding:2px;height:38px"></label>
+      </div>
+      <div class="toolbar"><button id="iRot" type="button">Rotate 90°</button><span class="hint">Drag the block on the map to move it.</span></div>
+    </div>
+    <div class="sec">
+      <h2>Aisles <span id="count" class="hit"></span></h2>
+      <div class="list" id="list"></div>
+    </div>
+    <div class="sec">
+      <h2>Save / share data</h2>
+      <p class="hint" style="margin:0">Everything saves in this browser. To move a store elsewhere, copy the JSON, or paste JSON and import it.</p>
+      <textarea id="json" class="json" aria-label="Store JSON"></textarea>
+      <div class="toolbar"><button id="btnCopy" type="button">Copy JSON</button><button id="btnImport" type="button">Import pasted JSON</button></div>
+    </div>
+  </aside>
+
+  <section class="mapwrap">
+    <div class="toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="q" placeholder="Find an item, e.g. peanut butter" aria-label="Find an item">
+      </div>
+      <span class="hit" id="hit"></span>
+      <label id="snapWrap" style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="snap" checked style="width:auto"> Snap to grid</label>
+      <button id="btnCam" class="ghost" hidden>Reset camera</button>
+      <div class="seg" role="group" aria-label="View"><button id="v2" aria-pressed="true">2D plan</button><button id="v3" aria-pressed="false">3D view</button></div>
+    </div>
+    <div class="canvasbox" id="view2d">
+      <div id="dragRead" hidden aria-live="polite"></div>
+      <div class="canvas"><svg id="map" aria-label="Store floor plan"></svg></div>
+    </div>
+    <div id="view3d" hidden><div id="view3dMsg">Loading 3D view…</div></div>
+    <div class="hint" id="hint3d" hidden>Drag to orbit · scroll or pinch to zoom · right-drag or two-finger drag to pan · click a shelf to select it. Move things in the 2D plan; 3D follows.</div>
+    <div class="legend" id="legend"></div>
+    <div class="panel sec trip" id="tripBox">
+      <h2>Plan a trip</h2>
+      <label>Shopping list, one per line or comma separated<textarea id="tripList" placeholder="milk&#10;peanut butter&#10;bananas&#10;chips"></textarea></label>
+      <div class="toolbar"><button class="primary" id="btnTrip">Find shortest route</button><button class="ghost" id="btnTripClear" hidden>Clear route</button></div>
+      <div id="tripOut" style="display:grid;gap:10px"></div>
+    </div>
+    <div class="panel sec" id="detail"></div>
+  </section>
+</div>
+
+<div class="modal" id="modal" hidden><div class="sheet" role="dialog" aria-modal="true" id="sheet"></div></div>
+<div class="toast" id="toast" role="status"></div>
+
+
+<!-- Three.js (global THREE) for the 3D view; the app itself is ES modules -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
