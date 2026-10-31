@@ -9,36 +9,17 @@
 //
 //   npm run gen-seed
 //
-// The fixture is TypeScript, so it is compiled to a temp directory first. It
-// imports nothing at runtime (its only import is `import type`), so the
-// compiled file stands alone.
 
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { writeFileSync } from 'node:fs';
+import { loadFixture } from './_fixture.mjs';
 
 const SURVEY_DATE = '2026-10-27';
 const STORE_ID = 1;
 
 const out = new URL('../supabase/migrations/0002_seed_sample_store.sql', import.meta.url);
-const tmp = mkdtempSync(join(tmpdir(), 'shoptimal-seed-'));
+const { pack, dispose } = await loadFixture();
 
 try {
-  const tsc = spawnSync(
-    'npx',
-    ['tsc', 'src/data/sampleStore.ts', '--outDir', tmp, '--rootDir', 'src',
-     '--module', 'esnext', '--target', 'es2022', '--moduleResolution', 'bundler', '--skipLibCheck'],
-    { stdio: 'inherit' },
-  );
-  if (tsc.status !== 0) {
-    console.error('tsc failed on the fixture');
-    process.exit(1);
-  }
-
-  const { sampleStorePack: pack } = await import(pathToFileURL(join(tmp, 'data/sampleStore.js')).href);
-
   const q = (v) => (v === undefined || v === null ? 'null' : `'${String(v).replace(/'/g, "''")}'`);
   const n = (v) => (v === undefined || v === null ? 'null' : String(v));
   const L = [];
@@ -145,7 +126,7 @@ try {
     `${Object.keys(pack.barcodes).length} barcodes, ${pack.locations.length} locations`,
   );
 } finally {
-  rmSync(tmp, { recursive: true, force: true });
+  dispose();
 }
 
 function fileURLBasename(u) {

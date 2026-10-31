@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "apply-schema": "node scripts/apply-schema.mjs",
     "check-schema": "node scripts/check-schema.mjs",
-    "gen-seed": "node scripts/gen-seed.mjs"
+    "gen-seed": "node scripts/gen-seed.mjs",
+    "export-rows": "node scripts/export-rows.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

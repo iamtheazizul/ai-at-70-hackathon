@@ -22,3 +22,6 @@ coverage/
 
 # Generated store packs (built artefacts, not source)
 packs/out/
+
+# VS Code Python extension artefact
+.vscode/PythonImportHelper-*.json
